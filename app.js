@@ -1,0 +1,107 @@
+const express = require('express');
+const sqlite3 = require('sqlite3').verbose();
+const multer = require('multer');
+const fs = require('fs');
+const csvParser = require('csv-parser');
+
+const app = express();
+const PORT = 3000;
+
+// Configure SQLite Database
+const db = new sqlite3.Database('./database.db', (err) => {
+    if (err) {
+        console.error('Erro ao conectar ao banco de dados:', err.message);
+    } else {
+        console.log('Conectado ao banco de dados SQLite.');
+    }
+});
+
+// Create table if not exists
+db.run(`CREATE TABLE IF NOT EXISTS movies (
+    year INTEGER,
+    title TEXT,
+    studios TEXT,
+    producers TEXT,
+    winner TEXT
+)`);
+
+// Multer configuration for uploads
+const upload = multer({ dest: 'uploads/' }); // Temporary folder to store uploads
+
+// Function to load data from CSV
+const loadCSVData = (filePath) => {
+    const data = [];
+    fs.createReadStream(filePath)
+        .pipe(csvParser({ separator: ';' })) // Adjusting to the correct delimiter
+        .on('data', (row) => {
+            data.push(row);
+        })
+        .on('end', () => {
+            console.log('Arquivo CSV lido com sucesso.');
+
+            // Insert data into the database
+            const insertStmt = db.prepare(`INSERT INTO movies (year, title, studios, producers, winner) VALUES (?, ?, ?, ?, ?)`);
+
+            data.forEach((movie) => {
+                insertStmt.run(movie.year, movie.title, movie.studios, movie.producers, movie.winner || 'no', (err) => {
+                    if (err) {
+                        console.error('Erro ao inserir dados:', err.message);
+                    }
+                });
+            });
+
+            insertStmt.finalize();
+            console.log('Dados inseridos no banco.');
+        });
+};
+
+// Endpoint for file upload
+app.post('/upload', upload.single('file'), (req, res) => {
+    const filePath = req.file.path;
+
+    // Load data from uploaded CSV
+    loadCSVData(filePath);
+
+    res.status(200).send({ message: 'Arquivo processado com sucesso!', file: req.file });
+});
+
+// Endpoint to list all movies
+app.get('/movies', (req, res) => {
+    db.all(`SELECT * FROM movies`, [], (err, rows) => {
+        if (err) {
+            res.status(500).send({ error: 'Erro ao buscar filmes' });
+        } else {
+            res.json(rows);
+        }
+    });
+});
+
+// Endpoint to search for movie by title
+app.get('/movies/:title', (req, res) => {
+    const title = req.params.title;
+    db.get(`SELECT * FROM movies WHERE title = ?`, [title], (err, row) => {
+        if (err) {
+            res.status(500).send({ error: 'Erro ao buscar filme' });
+        } else if (!row) {
+            res.status(404).send({ error: 'Filme não encontrado' });
+        } else {
+            res.json(row);
+        }
+    });
+});
+
+// Start the server
+app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+});
+
+// Close connection when process ends
+process.on('SIGINT', () => {
+    db.close((err) => {
+        if (err) {
+            console.error('Error closing database:', err.message);
+        }
+        console.log('Database connection closed.');
+        process.exit(0);
+    });
+});
