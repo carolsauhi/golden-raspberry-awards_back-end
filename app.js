@@ -90,6 +90,115 @@ app.get('/movies/:title', (req, res) => {
     });
 });
 
+
+// ********************************************************************
+
+// Função para calcular intervalos entre prêmios
+const calculateAwardIntervals = (callback) => {
+  const query = `
+      SELECT producers, year
+      FROM movies
+      WHERE winner = 'yes'
+  `;
+
+  db.all(query, [], (err, rows) => {
+      if (err) {
+          callback(err, null);
+          return;
+      }
+
+      // Mapeando produtores para suas respectivas listas de anos de prêmios
+      const producerAwards = {};
+      rows.forEach((row) => {
+          const producers = row.producers.split(','); // Separar múltiplos produtores
+          producers.forEach((producer) => {
+              const trimmedProducer = producer.trim();
+              if (!producerAwards[trimmedProducer]) {
+                  producerAwards[trimmedProducer] = [];
+              }
+              producerAwards[trimmedProducer].push(row.year);
+          });
+      });
+
+      // Calculando intervalos
+      const producerIntervals = [];
+      Object.keys(producerAwards).forEach((producer) => {
+          const years = producerAwards[producer].sort((a, b) => a - b); // Ordenar os anos
+          if (years.length > 1) {
+              for (let i = 1; i < years.length; i++) {
+                  producerIntervals.push({
+                      producer,
+                      interval: years[i] - years[i - 1],
+                      previousWin: years[i - 1],
+                      followingWin: years[i],
+                  });
+              }
+          }
+      });
+
+      callback(null, producerIntervals);
+  });
+};
+
+// Endpoint para obter o produtor com o maior intervalo entre prêmios consecutivos
+app.get('/producers/longest-interval', (req, res) => {
+  calculateAwardIntervals((err, intervals) => {
+      if (err) {
+          res.status(500).send({ error: 'Erro ao calcular intervalos.' });
+          return;
+      }
+
+      if (intervals.length === 0) {
+          res.status(404).send({ error: 'Nenhum intervalo encontrado entre prêmios.' });
+          return;
+      }
+
+      const maxInterval = intervals.reduce((prev, current) =>
+          current.interval > prev.interval ? current : prev
+      );
+
+      res.json({
+          producer: maxInterval.producer,
+          interval: maxInterval.interval,
+          previousWin: maxInterval.previousWin,
+          followingWin: maxInterval.followingWin,
+      });
+  });
+});
+
+// Endpoint para obter o produtor com o menor intervalo entre prêmios consecutivos
+app.get('/producers/shortest-interval', (req, res) => {
+  calculateAwardIntervals((err, intervals) => {
+      if (err) {
+          res.status(500).send({ error: 'Erro ao calcular intervalos.' });
+          return;
+      }
+
+      if (intervals.length === 0) {
+          res.status(404).send({ error: 'Nenhum intervalo encontrado entre prêmios.' });
+          return;
+      }
+
+      const minInterval = intervals.reduce((prev, current) =>
+          current.interval < prev.interval ? current : prev
+      );
+
+      res.json({
+          producer: minInterval.producer,
+          interval: minInterval.interval,
+          previousWin: minInterval.previousWin,
+          followingWin: minInterval.followingWin,
+      });
+  });
+});
+
+
+
+// *******************************************************************
+
+
+
+
 // Start the server
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
