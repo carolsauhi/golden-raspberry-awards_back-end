@@ -122,9 +122,5 @@ Os testes verificam:
 Este projeto foi desenvolvido por [**Carol Sauhi**](https://github.com/carolsauhi).
 
 ## Licença
-Este projeto é disponibilizado sob a licença ISC.
-
----
-
-Se tiver dúvidas ou precisar de suporte, entre em contato com o autor do projeto.
+Este projeto é de uso livre para estudo e desenvolvimento. Entre em contato para mais informações sobre direitos e permissões.
 
